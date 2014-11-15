@@ -34,7 +34,7 @@ public class GameListFragment extends Fragment implements ListAdapter
 
     public void setGameList(ArrayList<Game> gameList)
     {
-        if(GameCollection.getInstance().getGamelist().size() == 0)
+        if (GameCollection.getInstance().getGamelist().size() == 0)
         {
             for (Game g : gameList)
             {
@@ -43,11 +43,28 @@ public class GameListFragment extends Fragment implements ListAdapter
         }
     }
 
+
+    // This list
+    NetworkClass.Game[] _gameList;
+
+    public void setGameList(NetworkClass.Game[] gameList)
+    {
+        _gameList = gameList;
+        gameListView.invalidateViews();
+
+//        if(GameCollection.getInstance().getGamelist().size() == 0)
+//        {
+//            for(NetworkClass.Game g : gameList){
+//                GameCollection.getInstance().addGame(g);
+//            }
+//        }
+    }
+
     //region GameSelectedListener
 
     public interface OnGameSelectedListener
     {
-        public void onGameSelected(GameListFragment gameListFragment, Game game);
+        public void onGameSelected(GameListFragment gameListFragment, NetworkClass.Game game);
     }
 
     OnGameSelectedListener _onGameSelectedListener = null;
@@ -83,13 +100,18 @@ public class GameListFragment extends Fragment implements ListAdapter
             {
                 if (_onGameSelectedListener != null)
                 {
-                    for (int childIndex = 0; childIndex <  gameListView.getChildCount(); childIndex++)
+                    for (int childIndex = 0; childIndex < gameListView.getChildCount(); childIndex++)
                     {
                         gameListView.getChildAt(childIndex).setBackgroundColor(ITEM_COLOR);
                     }
                     view.setBackgroundColor(SELECTED_ITEM_COLOR);
+
+                    // Selected Game
                     _onGameSelectedListener.onGameSelected(GameListFragment.this,
-                            GameCollection.getInstance().getGamelist().get(i));
+                            _gameList[i]);
+//                    _onGameSelectedListener.onGameSelected(GameListFragment.this,
+//                            GameCollection.getInstance().getGamelist().get(i));
+
                     selectedGame = i;
                 }
             }
@@ -136,7 +158,10 @@ public class GameListFragment extends Fragment implements ListAdapter
     @Override
     public int getCount()
     {
-        return GameCollection.getInstance().getGamelist().size();
+        //return GameCollection.getInstance().getGamelist().size();
+        if (_gameList != null)
+            return _gameList.length;
+        return 0;
     }
 
     @Override
@@ -164,30 +189,40 @@ public class GameListFragment extends Fragment implements ListAdapter
         gameInfo.setTextColor(Color.WHITE);
         ViewGroup.LayoutParams params = gameInfo.getLayoutParams();
 
-        if (params == null) {
+        if (params == null)
+        {
             params = new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT);
-        } else {
+        } else
+        {
             params.height = ViewGroup.LayoutParams.MATCH_PARENT;
             params.width = ViewGroup.LayoutParams.WRAP_CONTENT;
         }
 
         gameInfo.setLayoutParams(params);
 
-        if(i != selectedGame)
+        if (i != selectedGame)
             gameInfo.setBackgroundColor(ITEM_COLOR);
         else
             gameInfo.setBackgroundColor(SELECTED_ITEM_COLOR);
 
-        if (GameCollection.getInstance().getGamelist().get(i).GameOver)
+//        if (GameCollection.getInstance().getGamelist().get(i).GameOver)
+//        {
+//            gameInfo.setText("Game " + i + ": " + GameCollection.getInstance().getGamelist().get(i).Winner + "\n" +
+//                    "Player1 Score: " + GameCollection.getInstance().getGamelist().get(i).getPlayer1Score() + "\n" +
+//                    "Player2 Score: " + GameCollection.getInstance().getGamelist().get(i).getPlayer2Score());
+//        } else
+//        {
+//            gameInfo.setText("Game " + i + ": Player" + GameCollection.getInstance().getGamelist().get(i).getPlayersTurn() + " Turn " + "\n" +
+//                    "Player1 Score: " + GameCollection.getInstance().getGamelist().get(i).getPlayer1Score() + "\n" +
+//                    "Player2 Score: " + GameCollection.getInstance().getGamelist().get(i).getPlayer2Score());
+//        }
+//        return gameInfo;
+
+        // TODO: SHOW GAMES FROM THE NEW LIST
+        if (_gameList != null)
         {
-            gameInfo.setText("Game " + i + ": " + GameCollection.getInstance().getGamelist().get(i).Winner + "\n" +
-                    "Player1 Score: " + GameCollection.getInstance().getGamelist().get(i).getPlayer1Score() + "\n" +
-                    "Player2 Score: " + GameCollection.getInstance().getGamelist().get(i).getPlayer2Score());
-        } else
-        {
-            gameInfo.setText("Game " + i + ": Player" + GameCollection.getInstance().getGamelist().get(i).getPlayersTurn() + " Turn " + "\n" +
-                    "Player1 Score: " + GameCollection.getInstance().getGamelist().get(i).getPlayer1Score() + "\n" +
-                    "Player2 Score: " + GameCollection.getInstance().getGamelist().get(i).getPlayer2Score());
+            gameInfo.setText("Game: " + _gameList[i].name + "\n" +
+                    " Status: " + _gameList[i].status);
         }
         return gameInfo;
     }

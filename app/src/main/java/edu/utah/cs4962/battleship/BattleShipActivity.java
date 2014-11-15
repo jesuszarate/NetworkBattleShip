@@ -3,11 +3,11 @@ package edu.utah.cs4962.battleship;
 import android.app.Activity;
 import android.app.FragmentManager;
 import android.app.FragmentTransaction;
+import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.graphics.Color;
-import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
@@ -15,6 +15,7 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.Toast;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
@@ -28,6 +29,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.HashMap;
 
 
 public class BattleShipActivity extends Activity
@@ -35,8 +37,9 @@ public class BattleShipActivity extends Activity
     public final static String PLAYERS_TURN = "players_turn";
     public FragmentManager fragmentManager;
     public GameFragment _gameFragment;
-    GameListFragment _gameListFragment;
-    FragmentTransaction _addTransaction;
+    public GameListFragment _gameListFragment;
+    public FragmentTransaction _addTransaction;
+    public NetworkClass _networkClass;
 
     LinearLayout secondLayout = null;
     LinearLayout gameListLayout = null;
@@ -46,7 +49,8 @@ public class BattleShipActivity extends Activity
 
     Gson _gson = new Gson();
 
-    boolean TransitionScreenUp = false;
+    // Key -> gameId, Value -> playerId
+    HashMap<String, String> MyNetworkGames = new HashMap<String, String>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
@@ -134,13 +138,13 @@ public class BattleShipActivity extends Activity
         _gameListFragment.setOnGameSelectedListener(new GameListFragment.OnGameSelectedListener()
         {
             @Override
-            public void onGameSelected(GameListFragment gameListFragment, Game g)
+            public void onGameSelected(GameListFragment gameListFragment, NetworkClass.Game g)
             {
-                Game game = g;
+                NetworkClass.Game game = g;
 
                 setProperWindowSize(false);
 
-                _gameFragment.setGame(game);
+                //_gameFragment.setGame(game);
 
             }
         });
@@ -213,6 +217,47 @@ public class BattleShipActivity extends Activity
         gameLayout = new FrameLayout(this);
         gameLayout.setId(10);
 
+        _networkClass = new NetworkClass();
+        _networkClass.getGameList(this); // Get game list from network.
+
+        //region <Network Listeners>
+
+        _networkClass.setOnGameListArrivedListener(new NetworkClass.OnGameListArrivedListener()
+        {
+            @Override
+            public void OnGameListArrived(NetworkClass networkClass, NetworkClass.Game[] _games)
+            {
+                _gameListFragment.setGameList(_games);
+            }
+        });
+
+        _networkClass.setOnBattleGridUpdatedListener(new NetworkClass.OnBattleGridUpdatedListener()
+        {
+            @Override
+            public void OnBattleGridUpdated(NetworkClass networkClass, NetworkClass.BattleGrid battleGrid)
+            {
+                if (battleGrid != null)
+                {
+                    _gameFragment.setGame(battleGrid);
+                } else
+                {
+                    Toast.makeText(BattleShipActivity.this, "You cannot play this game", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+
+        _networkClass.set_onGameDetailArrivedListener(new NetworkClass.OnGameDetailArrivedListener()
+        {
+            @Override
+            public void OnGameDetailArrived(NetworkClass networkClass, NetworkClass.GameDetail gameDetail)
+            {
+                NetworkClass.GameDetail g = gameDetail;
+            }
+        });
+
+        //endregion <Network Listeners>
+
+
 //region NewGameButton
 
         Button newGameButton = new Button(this);
@@ -225,9 +270,16 @@ public class BattleShipActivity extends Activity
             @Override
             public void onClick(View view)
             {
-                Game newGame = new Game();
-                // Add the game to the Fragment List.
-                _gameListFragment.AddItemGameToList(newGame);
+//                Game newGame = new Game();
+//                // Add the game to the Fragment List.
+//                _gameListFragment.AddItemGameToList(newGame);
+
+
+                // Get the game stuff
+                // _networkClass.requestNewGame(BattleShipActivity.this, "Name of the game goes in here", "Figure out a way to get player name in here");
+
+                //Start the new game activity
+                startNewGameActivity(BattleShipActivity.this);
             }
         });
 
@@ -235,12 +287,21 @@ public class BattleShipActivity extends Activity
         _gameListFragment.setOnGameSelectedListener(new GameListFragment.OnGameSelectedListener()
         {
             @Override
-            public void onGameSelected(GameListFragment gameListFragment, Game g)
+            public void onGameSelected(GameListFragment gameListFragment, NetworkClass.Game g)
             {
-                Game game = g;
 
-                _gameFragment.setGame(game);
+                //_networkClass.requestGameDetail(BattleShipActivity.this, g.id);
 
+                // Get the player id to retrieve the battle grid.
+                String playerId = MyNetworkGames.get(g.id);
+
+
+                // Request the game.
+                // Will only retrieve if the game
+                // corresponds to this player and if the game is in progress.
+                _networkClass.initBattleGrid(BattleShipActivity.this, g.id, playerId);
+
+//                _gameFragment.setGame(game);
             }
         });
 
@@ -254,6 +315,7 @@ public class BattleShipActivity extends Activity
         });
 
 //endregion NewGameButton
+
 
         secondLayout.addView(gameListLayout, new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.MATCH_PARENT, 20
@@ -283,6 +345,7 @@ public class BattleShipActivity extends Activity
         ));
         setContentView(rootLayout);
     }
+
 
     private void showWindow(String whatWindow)
     {
@@ -333,6 +396,13 @@ public class BattleShipActivity extends Activity
         return (isScreenLarge || isScreenXlarge);
     }
 
+    private void startNewGameActivity(Context context)
+    {
+        Intent intent = new Intent(context, CreateNewGameActivity.class);
+
+        startActivityForResult(intent, 6);
+    }
+
     public void startGameFragment()
     {
         _addTransaction = fragmentManager.beginTransaction();
@@ -350,6 +420,7 @@ public class BattleShipActivity extends Activity
         File filesDir = getFilesDir();
         try
         {
+            // Retrieve the selected game.
             File file = new File(filesDir, "selectedGame.txt");
             FileReader textReader = new FileReader(file);
 
@@ -364,6 +435,7 @@ public class BattleShipActivity extends Activity
             }
             bufferedReader.close();
 
+            // Retrieve Game List
             file = new File(filesDir, "gameList.txt");
             textReader = new FileReader(file);
 
@@ -379,6 +451,21 @@ public class BattleShipActivity extends Activity
             _gameListFragment.setGameList(gameList);
             bufferedReader.close();
 
+            // Retrieve the users network games.
+            file = new File(filesDir, "myNetworkGames.txt");
+            textReader = new FileReader(file);
+
+            bufferedReader = new BufferedReader(textReader);
+            String jsonNetworkGames = bufferedReader.readLine();
+
+            Type networkGamesType = new TypeToken<HashMap<String, String>>()
+            {
+            }.getType();
+            HashMap<String, String> networkGames = _gson.fromJson(jsonNetworkGames, networkGamesType);
+
+            MyNetworkGames = networkGames;
+
+            bufferedReader.close();
 
         } catch (FileNotFoundException e)
         {
@@ -401,6 +488,7 @@ public class BattleShipActivity extends Activity
         //String jsonGameList = _gson.toJson(new ArrayList<Game>());
         try
         {
+            // Save the game list.
             File file = new File(filesDir, "gameList.txt");
             FileWriter textWriter = null;
             textWriter = new FileWriter(file);
@@ -409,6 +497,7 @@ public class BattleShipActivity extends Activity
             bufferedWriter.write(jsonGameList);
             bufferedWriter.close();
 
+            // Save the selected game
             file = new File(filesDir, "selectedGame.txt");
             textWriter = new FileWriter(file);
             bufferedWriter = new BufferedWriter(textWriter);
@@ -416,6 +505,20 @@ public class BattleShipActivity extends Activity
             bufferedWriter.write(_gameListFragment.selectedGame + "");
             bufferedWriter.close();
 
+
+            // Save the users network games.
+            // TODO:
+            file = new File(filesDir, "myNetworkGames.txt");
+            textWriter = new FileWriter(file);
+            bufferedWriter = new BufferedWriter(textWriter);
+
+            // Uncomment this to populate the network game list.
+            MyNetworkGames = new HashMap<String, String>();
+            MyNetworkGames.put("91b428bd-9fe4-487c-8aba-946040a6392c", "b891ff56-ef53-4e50-8b11-f0070bbf4f02");
+
+            String jsonNetWorkGames = _gson.toJson(MyNetworkGames);
+            bufferedWriter.write(jsonNetWorkGames);
+            bufferedWriter.close();
         } catch (IOException e)
         {
             e.printStackTrace();

@@ -28,6 +28,13 @@ public class BattleGridView extends ViewGroup
     public static Ships _ships = new Ships();
     int _playerID;
 
+    //region Network grid Status:
+    public static final String HIT = "HIT";
+    public static final String MISS = "MISS";
+    public static final String SHIP = "SHIP";
+    public static final String NONE = "NONE";
+
+    //endregion Network grid Status
     public BattleGridView(Context context, int PlayerID)
     {
         super(context);
@@ -55,76 +62,107 @@ public class BattleGridView extends ViewGroup
 
     public void switchPlayersBattleGrid(Player player1, Player player2)
     {
+//        resetBattleGrid();
+//        setUpMyGrid(player1);
+//        setUpOponentsGrid(player1);
+
+    }
+
+    public void switchPlayersBattleGrid(NetworkClass.BattleGrid battleGrid)
+    {
         resetBattleGrid();
-        setUpMyGrid(player1);
-        setUpOponentsGrid(player1);
+        setUpMyGrid(battleGrid.playerBoard);
+       // setUpOponentsGrid(player1);
 
     }
 
-    public void setUpOponentsGrid(Player player)
+//    public void setUpOponentsGrid(NetworkClass.Cell player)
+//    {
+//        for (int cellIndex = 0; cellIndex < getChildCount(); cellIndex++)
+//        {
+//            if (player._oponentGameGrid.containsKey(cellIndex))
+//            {
+//                int hitMissWater = player._oponentGameGrid.get(cellIndex);
+//                CellView cellView = (CellView) getChildAt(cellIndex);
+//
+//                if (hitMissWater == GameModel.WATER)
+//                {
+//                    cellView.setBackgroundColor(Color.BLUE);
+//                } else if (hitMissWater == GameModel.MISS)
+//                {
+//                    cellView.setBackgroundColor(Color.WHITE);
+//                } else
+//                {
+//                    cellView.setBackgroundColor(Color.RED);
+//                }
+//            }
+//        }
+//    }
+
+
+    public void setUpMyGrid(NetworkClass.Cell[] player)
     {
-        for (int cellIndex = 0; cellIndex < getChildCount(); cellIndex++)
+        int GridSize = 10;
+        int mySideOfGrid = 100;
+        for(NetworkClass.Cell cell : player)
         {
-            if (player._oponentGameGrid.containsKey(cellIndex))
-            {
-                int hitMissWater = player._oponentGameGrid.get(cellIndex);
-                CellView cellView = (CellView) getChildAt(cellIndex);
+            int cellPostion = mySideOfGrid + (cell.xPos * GridSize) + cell.yPos;
 
-                if (hitMissWater == GameModel.WATER)
-                {
-                    cellView.setBackgroundColor(Color.BLUE);
-                } else if (hitMissWater == GameModel.MISS)
-                {
-                    cellView.setBackgroundColor(Color.WHITE);
-                } else
-                {
-                    cellView.setBackgroundColor(Color.RED);
-                }
+            if(cell.status.equals(MISS))
+            {
+                getChildAt(cellPostion).setBackgroundColor(Color.WHITE);
+            }
+            else if(cell.status.equals(HIT))
+            {
+                getChildAt(cellPostion).setBackgroundColor(Color.RED);
+            }
+            else if(cell.status.equals(SHIP))
+            {
+                getChildAt(cellPostion).setBackgroundColor(Color.GRAY);
+            }
+            else
+            {
+                getChildAt(cellPostion).setBackgroundColor(Color.BLUE);
             }
         }
-    }
-
-
-    public void setUpMyGrid(Player player)
-    {
-        try
-        {
-            for (int[] ship : player._ships.myShips.ships.values())
-            {
-                for (int shipPos = 0; shipPos < ship.length; shipPos++)
-                {
-                    int what = ship[shipPos];
-                    if (ship[shipPos] > -1)
-                        getChildAt(ship[shipPos] + 100).setBackgroundColor(Color.GRAY);
-                }
-            }
-
-            Iterator it = player._oponentsAttacks.entrySet().iterator();
-
-            while (it.hasNext())
-            {
-                Map.Entry pairs = (Map.Entry) it.next();
-                try
-                {
-                    if ((Integer) pairs.getValue() == GameModel.MISS)
-                    {
-                        getChildAt((Integer) pairs.getKey() + 100).setBackgroundColor(Color.WHITE);
-                    } else if ((Integer) pairs.getValue() == GameModel.WATER)
-                    {
-                        getChildAt((Integer) pairs.getKey() + 100).setBackgroundColor(Color.BLUE);
-                    } else
-                    {
-                        getChildAt((Integer) pairs.getKey() + 100).setBackgroundColor(Color.RED);
-                    }
-
-                } catch (Exception e)
-                {
-                }
-            }
-        }
-        catch (Exception e){
-            String exp = e.toString();
-        }
+//        try
+//        {
+//            for (int[] ship : player._ships.myShips.ships.values())
+//            {
+//                for (int shipPos = 0; shipPos < ship.length; shipPos++)
+//                {
+//                    int what = ship[shipPos];
+//                    if (ship[shipPos] > -1)
+//                        getChildAt(ship[shipPos] + 100).setBackgroundColor(Color.GRAY);
+//                }
+//            }
+//
+//            Iterator it = player._oponentsAttacks.entrySet().iterator();
+//
+//            while (it.hasNext())
+//            {
+//                Map.Entry pairs = (Map.Entry) it.next();
+//                try
+//                {
+//                    if ((Integer) pairs.getValue() == GameModel.MISS)
+//                    {
+//                        getChildAt((Integer) pairs.getKey() + 100).setBackgroundColor(Color.WHITE);
+//                    } else if ((Integer) pairs.getValue() == GameModel.WATER)
+//                    {
+//                        getChildAt((Integer) pairs.getKey() + 100).setBackgroundColor(Color.BLUE);
+//                    } else
+//                    {
+//                        getChildAt((Integer) pairs.getKey() + 100).setBackgroundColor(Color.RED);
+//                    }
+//
+//                } catch (Exception e)
+//                {
+//                }
+//            }
+//        }
+//        catch (Exception e){
+//            String exp = e.toString();
+//        }
     }
 
     public void resetBattleGrid()

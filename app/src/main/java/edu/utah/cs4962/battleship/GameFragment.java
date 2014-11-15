@@ -36,6 +36,8 @@ public class GameFragment extends Fragment
     Timer timer = new Timer();
 
 
+
+
     //region Listeners
 
     public interface OnSwitchPlayerListener
@@ -69,6 +71,8 @@ public class GameFragment extends Fragment
 
     //endregion
 
+    // TODO: UPDATE EVERYTHING IN THIS METHOD TO MATCH THE INFORMATION ON THE NETWORK GAME.
+
     public void InitializeGame(Game game)
     {
         _game = game;
@@ -86,9 +90,50 @@ public class GameFragment extends Fragment
         return battleGridView;
     }
 
+    public void setGame(NetworkClass.BattleGrid battleGrid)
+    {
+        battleGridView.setUpGridBackground();
+        int cellPostion = 0;
+        for (int position = 0; position < 200; position++)
+        {
+//            NetworkClass.Cell cell = battleGrid.playerBoard[position];
+
+            CellView cellView = new CellView(getActivity());
+
+            cellView.setGridPosition(cellPostion);
+
+            battleGridView._childrenIndex.put(cellPostion, position);
+
+            cellPostion++;
+
+            battleGridView.addView(cellView, 55, 55);
+            cellView.setOnCellTouchListener(new CellView.OnCellTouchListener()
+            {
+                @Override
+                public void onCellTouched(CellView c)
+                {
+                    if (c.getGridPosition() <= 100 )//&& !_game.GameOver)
+                    {
+//                        if (_game.getPlayersTurn() == PLAYER1 && _allowedToTouch)
+//                        {
+//                            _allowedToTouch = false;
+//                            _game.getPlayer(PLAYER1).LaunchMissile(c.getGridPosition());
+//
+//                        } else if (_game.getPlayersTurn() == PLAYER2 && _allowedToTouch)
+//                        {
+//                            _allowedToTouch = false;
+//                            _game.getPlayer(PLAYER2).LaunchMissile(c.getGridPosition());
+//                        }
+                    }
+                }
+            });
+        }
+        battleGridView.switchPlayersBattleGrid(battleGrid);
+    }
+
     public void setGame(Game game)
     {
-        InitializeGame(game);
+        //InitializeGame(game);
         battleGridView.setUpGridBackground();
         int cellPostion = 0;
         for (int position = 0; position < 200; position++)
@@ -107,23 +152,25 @@ public class GameFragment extends Fragment
                 @Override
                 public void onCellTouched(CellView c)
                 {
-                    if (c.getGridPosition() <= 100 && !_game.GameOver)
+                    if (c.getGridPosition() <= 100 )//&& !_game.GameOver)
                     {
-                        if (_game.getPlayersTurn() == PLAYER1 && _allowedToTouch)
-                        {
-                            _allowedToTouch = false;
-                            _game.getPlayer(PLAYER1).LaunchMissile(c.getGridPosition());
-
-                        } else if (_game.getPlayersTurn() == PLAYER2 && _allowedToTouch)
-                        {
-                            _allowedToTouch = false;
-                            _game.getPlayer(PLAYER2).LaunchMissile(c.getGridPosition());
-                        }
+//                        if (_game.getPlayersTurn() == PLAYER1 && _allowedToTouch)
+//                        {
+//                            _allowedToTouch = false;
+//                            _game.getPlayer(PLAYER1).LaunchMissile(c.getGridPosition());
+//
+//                        } else if (_game.getPlayersTurn() == PLAYER2 && _allowedToTouch)
+//                        {
+//                            _allowedToTouch = false;
+//                            _game.getPlayer(PLAYER2).LaunchMissile(c.getGridPosition());
+//                        }
                     }
                 }
             });
         }
 
+        //region CommentedCode
+/*
         if (_playersTurn == 1)
         {
             battleGridView.switchPlayersBattleGrid(player1, player2);
@@ -250,6 +297,9 @@ public class GameFragment extends Fragment
         });
 
         //endregion PlayerWon
+        */
+
+        //endregion CommentedCode
     }
 
 
