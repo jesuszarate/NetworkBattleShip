@@ -13,8 +13,6 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
 
 
 /**
@@ -68,16 +66,45 @@ public class BattleGridView extends ViewGroup
 
     }
 
-    public void switchPlayersBattleGrid(NetworkClass.BattleGrid battleGrid)
+    public void switchPlayersBattleGrid(HashMap<String, NetworkClass.Cell[]> battleGrid)
     {
-        resetBattleGrid();
-        setUpMyGrid(battleGrid.playerBoard);
-       // setUpOponentsGrid(player1);
+        if(battleGrid != null && battleGrid.containsKey("playerBoard") &&
+                battleGrid.containsKey("opponentBoard"))
+        {
+            resetBattleGrid();
 
+            setUpMyGrid(battleGrid.get("playerBoard"));
+            setUpOponentsGrid(battleGrid.get("opponentBoard"));
+        }
     }
 
-//    public void setUpOponentsGrid(NetworkClass.Cell player)
-//    {
+    public void setUpOponentsGrid(NetworkClass.Cell[] opponentsGrid)
+    {
+
+        int GridSize = 10;
+        for(NetworkClass.Cell cell : opponentsGrid)
+        {
+            int cellPostion = (cell.xPos * GridSize) + cell.yPos;
+
+            if(cell.status.equals(MISS))
+            {
+                getChildAt(cellPostion).setBackgroundColor(Color.WHITE);
+            }
+            else if(cell.status.equals(HIT))
+            {
+                getChildAt(cellPostion).setBackgroundColor(Color.RED);
+            }
+            else if(cell.status.equals(SHIP))
+            {
+                getChildAt(cellPostion).setBackgroundColor(Color.GRAY);
+            }
+            else
+            {
+                getChildAt(cellPostion).setBackgroundColor(Color.BLUE);
+            }
+        }
+
+    }
 //        for (int cellIndex = 0; cellIndex < getChildCount(); cellIndex++)
 //        {
 //            if (player._oponentGameGrid.containsKey(cellIndex))

@@ -60,6 +60,11 @@ public class GameListFragment extends Fragment implements ListAdapter
 //        }
     }
 
+    public String getSelectedGameId()
+    {
+        return _gameList[selectedGame].id;
+    }
+
     //region GameSelectedListener
 
     public interface OnGameSelectedListener
@@ -98,7 +103,7 @@ public class GameListFragment extends Fragment implements ListAdapter
             @Override
             public void onItemClick(AdapterView<?> adapterView, View view, int i, long l)
             {
-                if (_onGameSelectedListener != null)
+                if (_onGameSelectedListener != null && !BattleShipActivity._waitingToJoinGame)
                 {
                     for (int childIndex = 0; childIndex < gameListView.getChildCount(); childIndex++)
                     {

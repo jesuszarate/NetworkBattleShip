@@ -21,9 +21,8 @@ import java.io.InputStream;
 import java.lang.reflect.Type;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
 import java.util.Scanner;
 
 /**
@@ -33,6 +32,8 @@ public class NetworkClass
 {
 
     private static final String BASE_URL = "http://battleship.pixio.com/api/games/";
+    public static final String GAME_ID = "gameId";
+    public static final String PLAYER_ID = "playerId";
 
     Gson _gson = new Gson();
 
@@ -56,6 +57,7 @@ public class NetworkClass
     {
         public void OnGameDetailArrived(NetworkClass networkClass, NetworkClass.GameDetail gameDetail);
     }
+
     OnGameDetailArrivedListener _onGameDetailArrivedListener = null;
 
     public void set_onGameDetailArrivedListener(OnGameDetailArrivedListener _onGameDetailArrivedListener)
@@ -67,12 +69,50 @@ public class NetworkClass
     {
         public void OnGameInfoArrived(NetworkClass networkClass, HashMap<String, String> gameInfo);
     }
+
     OnNewGameInfoArrivedListener _onNewGameInfoArrivedListener = null;
 
     public void setOnNewGameInfoArrivedListener(OnNewGameInfoArrivedListener onNewGameInfoArrivedListener)
     {
         this._onNewGameInfoArrivedListener = onNewGameInfoArrivedListener;
     }
+
+    public interface OnErrorReceivedListener
+    {
+        public void OnErrorReceived(NetworkClass networkClass, String errorMessage);
+    }
+
+    OnErrorReceivedListener _onErrorReceivedListener = null;
+
+    public void setOnErrorReceivedListener(OnErrorReceivedListener onErrorReceivedListener)
+    {
+        this._onErrorReceivedListener = onErrorReceivedListener;
+    }
+
+    public interface OnJoinRequestReceivedListener
+    {
+        public void OnJoinRequestReceived(NetworkClass networkClass);
+    }
+
+    OnJoinRequestReceivedListener _onJoinRequestReceivedListener = null;
+
+    public void setOnJoinRequestReceivedListener(OnJoinRequestReceivedListener _onJoinRequestReceivedListener)
+    {
+        this._onJoinRequestReceivedListener = _onJoinRequestReceivedListener;
+    }
+
+    public interface OnPlayerIdReceivedListener
+    {
+        public void OnPlayerIdReceived(NetworkClass networkClass, String playerId);
+    }
+
+    OnPlayerIdReceivedListener _onPlayerIdReceivedListener = null;
+
+    public void setOnPlayerIdReceivedListener(OnPlayerIdReceivedListener onPlayerIdReceivedListener)
+    {
+        this._onPlayerIdReceivedListener = onPlayerIdReceivedListener;
+    }
+
     //endregion <Listeners>
 
 
@@ -233,7 +273,7 @@ public class NetworkClass
 
     public interface OnBattleGridUpdatedListener
     {
-        public void OnBattleGridUpdated(NetworkClass networkClass, BattleGrid battleGrid);
+        public void OnBattleGridUpdated(NetworkClass networkClass, HashMap<String, Cell[]> battleGrid);
     }
 
     OnBattleGridUpdatedListener _onBattleGridUpdatedListener = null;
@@ -280,14 +320,25 @@ public class NetworkClass
         {
             try
             {
-                BattleGrid battleGrid = getBattleGrid(result);
+                HashMap<String, Cell[]> battleGrid = getBattleGrid(result);
 
-                _onBattleGridUpdatedListener.OnBattleGridUpdated(NetworkClass.this, battleGrid);
+                if (battleGrid != null)
+                {
+                    _onBattleGridUpdatedListener.OnBattleGridUpdated(NetworkClass.this, battleGrid);
+                }
+                else if(!result.equals("{\"message\":\"The player does not belong to this game\"}"))
+                {
+                    _onJoinRequestReceivedListener.OnJoinRequestReceived(NetworkClass.this);
+//                    _onErrorReceivedListener.OnErrorReceived(NetworkClass.this, result);
+                }
 
             } catch (Exception e)
             {
 
-                _onBattleGridUpdatedListener.OnBattleGridUpdated(NetworkClass.this, null);
+                //TODO: Use the message given by result to display the proper message to the user i.e.
+                _onErrorReceivedListener.OnErrorReceived(NetworkClass.this, result);
+
+                //_onBattleGridUpdatedListener.OnBattleGridUpdated(NetworkClass.this, null);
             }
         }
     }
@@ -331,11 +382,12 @@ public class NetworkClass
         return null;
     }
 
-    private BattleGrid getBattleGrid(String result)
+    private HashMap<String, Cell[]> getBattleGrid(String result)
     {
-        Type gameType = new TypeToken<BattleGrid>()
+        Type gameType = new TypeToken<HashMap<String, Cell[]>>()
         {
         }.getType();
+
         return _gson.fromJson(result, gameType);
     }
 
@@ -343,8 +395,6 @@ public class NetworkClass
     {
         Cell[] playerBoard;
         Cell[] oponentBoard;
-//        HashMap<String, Cell[]> playerBoard;
-//        HashMap<String, Cell[]> oponentBoard;
     }
 
     class Cell
@@ -355,7 +405,6 @@ public class NetworkClass
     }
 
     //endregion <Get Battle Grid>
-
 
     //region <Create New Game>
 
@@ -392,27 +441,20 @@ public class NetworkClass
         @Override
         protected void onPostExecute(String result)
         {
-            HashMap<String, String> gameInfo = getNewGameInfo(result);
+            try
+            {
+                HashMap<String, String> gameInfo = getNewGameInfo(result);
 
-            _onNewGameInfoArrivedListener.OnGameInfoArrived(NetworkClass.this, gameInfo);
-
-//            Iterator it = gameDetail.entrySet().iterator();
-//            while (it.hasNext())
-//            {
-//                Map.Entry pairs = (Map.Entry) it.next();
-//                if (pairs.getKey().equals("gameId"))
-//                {
-//                    GAME_ID = pairs;
-//                } else
-//                    PLAYER_ID = pairs;
-//
-//                it.remove(); // avoids a ConcurrentModificationException
-//            }
+                _onNewGameInfoArrivedListener.OnGameInfoArrived(NetworkClass.this, gameInfo);
+            } catch (Exception e)
+            {
+                _onNewGameInfoArrivedListener.OnGameInfoArrived(NetworkClass.this, null);
+            }
         }
     }
 
     private String requestNewGameFromNetwork(String myurl, String gameNameTag, String gameName,
-                                  String playerNameTag, String playerName) throws IOException
+                                             String playerNameTag, String playerName) throws IOException
     {
         InputStream is = null;
 
@@ -461,6 +503,227 @@ public class NetworkClass
     }
 
     //endregion <Create New Game>
+
+    //region <Join Game>
+
+    public void JoinGame(Context context, String gameId, String playerName)
+    {
+        String playerNameTag = "playerName";
+
+        String stringUrl = "http://battleship.pixio.com/api/games/" + gameId + "/join";
+        ConnectivityManager connMgr = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo networkInfo = connMgr.getActiveNetworkInfo();
+        if (networkInfo != null && networkInfo.isConnected())
+        {
+            new JoinGameTask().execute(stringUrl, playerNameTag, playerName);
+        } else
+        {
+            //textView.setText("No network connection available.");
+        }
+
+    }
+
+    private class JoinGameTask extends AsyncTask<String, Void, String>
+    {
+
+        @Override
+        protected String doInBackground(String... strings)
+        {
+            // params comes from the execute() call: params[0] is the url.
+            try
+            {
+                return requestJoinGame(strings[0], strings[1], strings[2]);
+            } catch (IOException e)
+            {
+                return "Unable to retrieve web page. URL may be invalid.";
+            }
+        }
+
+        @Override
+        protected void onPostExecute(String result)
+        {
+            // Do something with the returned information
+            String playerId = getPlayerId(result);
+
+            if (playerId != null)
+                _onPlayerIdReceivedListener.OnPlayerIdReceived(NetworkClass.this, playerId);
+            //_onJoinRequestReceivedListener.OnJoinRequestReceived(NetworkClass.this, playerId);
+
+            //getBattleGrid(gameId);
+
+        }
+
+    }
+
+    private String requestJoinGame(String myurl, String playerNameTag, String playerName) throws IOException
+    {
+        InputStream is = null;
+
+        try
+        {
+            JSONObject jsonobj = new JSONObject();
+
+            jsonobj.put(playerNameTag, playerName);
+
+            DefaultHttpClient httpclient = new DefaultHttpClient();
+            HttpPost httppostreq = new HttpPost(myurl);
+
+            StringEntity stringEntity = new StringEntity(jsonobj.toString());
+
+            stringEntity.setContentType("application/json");
+            httppostreq.setEntity(stringEntity);
+
+            HttpResponse httpResponse = httpclient.execute(httppostreq);
+
+            String responseText;
+
+            responseText = EntityUtils.toString(httpResponse.getEntity());
+
+            return responseText;
+
+        } catch (JSONException e)
+        {
+            e.printStackTrace();
+        } finally
+        {
+            if (is != null)
+            {
+                is.close();
+            }
+        }
+        return null;
+    }
+
+    private String getPlayerId(String result)
+    {
+        try
+        {
+            Type gameType = new TypeToken<HashMap<String, String>>()
+            {
+            }.getType();
+            HashMap<String, String> Guid = _gson.fromJson(result, gameType);
+            return Guid.get("playerId");
+        } catch (Exception e)
+        {
+            return null;
+        }
+    }
+    //endregion <Join Game>
+
+    //region <Launch Missile>
+    public void LaunchMissile(Context context, String gameId, String playerId, int xPos, int yPos)
+    {
+        String playerNameTag = "playerName";
+
+        String stringUrl = "http://battleship.pixio.com/api/games/" + gameId + "/guess";
+        ConnectivityManager connMgr = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo networkInfo = connMgr.getActiveNetworkInfo();
+        if (networkInfo != null && networkInfo.isConnected())
+        {
+            new LaunchMissileTask().execute(stringUrl, playerNameTag, playerId, xPos+"", yPos+"");
+        } else
+        {
+            //textView.setText("No network connection available.");
+        }
+
+    }
+
+    private class LaunchMissileTask extends AsyncTask<String, Void, String>
+    {
+
+        @Override
+        protected String doInBackground(String... strings)
+        {
+            // params comes from the execute() call: params[0] is the url.
+            try
+            {
+                return requestMissileLaunch(strings[0], strings[1], strings[2], strings[3], strings[4]);
+            } catch (IOException e)
+            {
+                return "Unable to retrieve web page. URL may be invalid.";
+            }
+        }
+
+        @Override
+        protected void onPostExecute(String result)
+        {
+            // Do something with the returned information
+            HashMap<String, String> missileAttackResult = parseMissileAttackResult(result);
+
+            if (missileAttackResult != null)
+            {
+
+                if(missileAttackResult.containsKey("message"))
+                {
+                    String message = missileAttackResult.get("message");
+
+                    _onErrorReceivedListener.OnErrorReceived(NetworkClass.this, message)    ;
+                }
+            }
+
+        }
+
+    }
+
+    private String requestMissileLaunch(String myurl, String playerNameTag, String playerId, String xPos, String yPos) throws IOException
+    {
+        InputStream is = null;
+
+        try
+        {
+            HashMap<String, String> missileAttack = new HashMap<String, String>();
+            missileAttack.put("playerId", playerId);
+            missileAttack.put("xPos", xPos);
+            missileAttack.put("yPos", yPos);
+
+            String jsonMissileAttack = _gson.toJson(missileAttack);
+
+            DefaultHttpClient httpclient = new DefaultHttpClient();
+            HttpPost httppostreq = new HttpPost(myurl);
+
+            StringEntity stringEntity = new StringEntity(jsonMissileAttack);
+
+            stringEntity.setContentType("application/json");
+            httppostreq.setEntity(stringEntity);
+
+            HttpResponse httpResponse = httpclient.execute(httppostreq);
+
+            String responseText;
+
+            responseText = EntityUtils.toString(httpResponse.getEntity());
+
+            return responseText;
+
+        } finally
+        {
+            if (is != null)
+            {
+                is.close();
+            }
+        }
+    }
+
+    private HashMap<String, String> parseMissileAttackResult(String result)
+    {
+        try
+        {
+            Type gameType = new TypeToken<HashMap<String, String>>()
+            {
+            }.getType();
+            HashMap<String, String> missileAttackRes = _gson.fromJson(result, gameType);
+            return missileAttackRes;
+        } catch (Exception e)
+        {
+            return null;
+        }
+    }
+
+    class MissileAttack
+    {
+        String playerId;
+        String xPos;
+        String yPos;
+    }
 
     class Game
     {

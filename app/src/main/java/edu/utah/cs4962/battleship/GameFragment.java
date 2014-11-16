@@ -8,6 +8,8 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Toast;
+
+import java.util.HashMap;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -69,6 +71,16 @@ public class GameFragment extends Fragment
     }
     //endregion UpdateListViewsListener
 
+    public interface OnLaunchMissileListener
+    {
+        public void OnLauchMissile(GameFragment gameFragment, int xPos, int yPos);
+    }
+    OnLaunchMissileListener _onLaunchMissileListener = null;
+
+    public void setOnMissileLaunchListener(OnLaunchMissileListener onMissileLaunchListener)
+    {
+        this._onLaunchMissileListener = onMissileLaunchListener;
+    }
     //endregion
 
     // TODO: UPDATE EVERYTHING IN THIS METHOD TO MATCH THE INFORMATION ON THE NETWORK GAME.
@@ -90,7 +102,7 @@ public class GameFragment extends Fragment
         return battleGridView;
     }
 
-    public void setGame(NetworkClass.BattleGrid battleGrid)
+    public void setGame(HashMap<String, NetworkClass.Cell[]> battleGrid)
     {
         battleGridView.setUpGridBackground();
         int cellPostion = 0;
@@ -114,6 +126,14 @@ public class GameFragment extends Fragment
                 {
                     if (c.getGridPosition() <= 100 )//&& !_game.GameOver)
                     {
+
+                        int xPos = c.getGridPosition() % 10;
+                        int yPos = c.getGridPosition() / 10;
+
+                        // Launch missile.
+                        _onLaunchMissileListener.OnLauchMissile(GameFragment.this, xPos, yPos);
+
+
 //                        if (_game.getPlayersTurn() == PLAYER1 && _allowedToTouch)
 //                        {
 //                            _allowedToTouch = false;
