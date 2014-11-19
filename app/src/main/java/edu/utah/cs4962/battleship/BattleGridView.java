@@ -26,6 +26,8 @@ public class BattleGridView extends ViewGroup
     public static Ships _ships = new Ships();
     int _playerID;
 
+    public static final int GridSize = 10;
+
     //region Network grid Status:
     public static final String HIT = "HIT";
     public static final String MISS = "MISS";
@@ -280,6 +282,25 @@ public class BattleGridView extends ViewGroup
     public void setUpGridBackground()
     {
         setBackground(new drawable());
+    }
+
+    public void recordAttack(int xPos, int yPos, String attackResult)
+    {
+        int cellPostion = (xPos * GridSize) + yPos;
+
+        if(attackResult.equals(HIT))
+        {
+            getChildAt(cellPostion).setBackgroundColor(Color.RED);
+        }
+
+        else if (attackResult.equals(MISS))
+        {
+            getChildAt(cellPostion).setBackgroundColor(Color.WHITE);
+        }
+        else
+        {
+            getChildAt(cellPostion).setBackgroundColor(Color.CYAN);
+        }
     }
 
     private class drawable extends Drawable

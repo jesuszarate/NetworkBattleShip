@@ -4,6 +4,7 @@ import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.AsyncTask;
+import android.util.Log;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
@@ -36,6 +37,13 @@ public class NetworkClass
     public static final String PLAYER_ID = "playerId";
 
     Gson _gson = new Gson();
+
+    private Context _context;
+
+    public NetworkClass(Context context)
+    {
+        _context = context;
+    }
 
 
     //region <Listeners>
@@ -113,6 +121,40 @@ public class NetworkClass
         this._onPlayerIdReceivedListener = onPlayerIdReceivedListener;
     }
 
+    public interface OnNeedToUpdateBattleGridListener
+    {
+        public void OnNeedToUpdateBattleGrid(NetworkClass networkClass, String playersTurn, boolean myTurn);
+    }
+
+    OnNeedToUpdateBattleGridListener _onNeedToUpdateBattleGridListener = null;
+
+    public void setOnNeedToUpdateBattleGridListener(OnNeedToUpdateBattleGridListener onNeedToUpdateBattleGridListener)
+    {
+        this._onNeedToUpdateBattleGridListener = onNeedToUpdateBattleGridListener;
+    }
+
+    public interface OnMissileLaunchResultArrivedListener
+    {
+        public void OnMissileLaunchResultArrived(NetworkClass networkClass, String result);
+    }
+
+    OnMissileLaunchResultArrivedListener _onMissileLaunchResultArrivedListener = null;
+
+    public void setOnMissileLaunchResultArrivedListener(OnMissileLaunchResultArrivedListener onMissileLaunchResultArrivedListener)
+    {
+        this._onMissileLaunchResultArrivedListener = onMissileLaunchResultArrivedListener;
+    }
+
+    public interface OnGameEndedListener
+    {
+        public void OnGameEnded(NetworkClass networkClass, String winner);
+    }
+    OnGameEndedListener _onGameEndedListener = null;
+
+    public void setOnGameEndedListener(OnGameEndedListener onGameEndedListener)
+    {
+        this._onGameEndedListener = onGameEndedListener;
+    }
     //endregion <Listeners>
 
 
@@ -155,9 +197,16 @@ public class NetworkClass
         @Override
         protected void onPostExecute(String result)
         {
-            Game[] _games = parseJson(result);
+            try
+            {
+                Game[] _games = parseJson(result);
 
-            _onGameListArrivedListener.OnGameListArrived(NetworkClass.this, _games);
+                _onGameListArrivedListener.OnGameListArrived(NetworkClass.this, _games);
+            }
+            catch (Exception e)
+            {
+                //_onErrorReceivedListener.OnErrorReceived(NetworkClass.this, result);
+            }
         }
 
     }
@@ -325,19 +374,27 @@ public class NetworkClass
                 if (battleGrid != null)
                 {
                     _onBattleGridUpdatedListener.OnBattleGridUpdated(NetworkClass.this, battleGrid);
-                }
-                else if(!result.equals("{\"message\":\"The player does not belong to this game\"}"))
+                } else if (!result.equals("{\"message\":\"The player does not belong to this game\"}"))
                 {
                     _onJoinRequestReceivedListener.OnJoinRequestReceived(NetworkClass.this);
 //                    _onErrorReceivedListener.OnErrorReceived(NetworkClass.this, result);
                 }
 
-            } catch (Exception e)
+            }catch (NullPointerException ne){
+                // Do nothing if there was a NullPointerException.
+                Log.e("NullPointerException In GetGrid", ne.toString());
+            }
+            catch (Exception e)
             {
 
-                //TODO: Use the message given by result to display the proper message to the user i.e.
-                _onErrorReceivedListener.OnErrorReceived(NetworkClass.this, result);
-
+                if (result.equals("Player id is not a valid GUID"))
+                {
+                    _onJoinRequestReceivedListener.OnJoinRequestReceived(NetworkClass.this);
+                } else
+                {
+                    //TODO: Use the message given by result to display the proper message to the user i.e.
+                    _onErrorReceivedListener.OnErrorReceived(NetworkClass.this, result);
+                }
                 //_onBattleGridUpdatedListener.OnBattleGridUpdated(NetworkClass.this, null);
             }
         }
@@ -389,12 +446,6 @@ public class NetworkClass
         }.getType();
 
         return _gson.fromJson(result, gameType);
-    }
-
-    class BattleGrid
-    {
-        Cell[] playerBoard;
-        Cell[] oponentBoard;
     }
 
     class Cell
@@ -620,7 +671,7 @@ public class NetworkClass
         NetworkInfo networkInfo = connMgr.getActiveNetworkInfo();
         if (networkInfo != null && networkInfo.isConnected())
         {
-            new LaunchMissileTask().execute(stringUrl, playerNameTag, playerId, xPos+"", yPos+"");
+            new LaunchMissileTask().execute(stringUrl, playerNameTag, playerId, xPos + "", yPos + "");
         } else
         {
             //textView.setText("No network connection available.");
@@ -652,12 +703,19 @@ public class NetworkClass
 
             if (missileAttackResult != null)
             {
+                if (missileAttackResult.containsKey("hit"))
+                {
+                    if (missileAttackResult.get("hit").equals("true"))
+                        _onMissileLaunchResultArrivedListener.OnMissileLaunchResultArrived(NetworkClass.this, BattleGridView.HIT);
+                    else
+                        _onMissileLaunchResultArrivedListener.OnMissileLaunchResultArrived(NetworkClass.this, BattleGridView.MISS);
+                }
 
-                if(missileAttackResult.containsKey("message"))
+                else if (missileAttackResult.containsKey("message"))
                 {
                     String message = missileAttackResult.get("message");
 
-                    _onErrorReceivedListener.OnErrorReceived(NetworkClass.this, message)    ;
+                    _onErrorReceivedListener.OnErrorReceived(NetworkClass.this, message);
                 }
             }
 
@@ -717,13 +775,134 @@ public class NetworkClass
             return null;
         }
     }
+    //endregion <Launch Missile>
 
-    class MissileAttack
+    //region <CheckStatus>
+    public void CheckGameStatus(Context context, String gameId, String playerId)
     {
-        String playerId;
-        String xPos;
-        String yPos;
+        String stringUrl = "http://battleship.pixio.com/api/games/" + gameId + "/status";
+        ConnectivityManager connMgr = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo networkInfo = connMgr.getActiveNetworkInfo();
+        if (networkInfo != null && networkInfo.isConnected())
+        {
+            new GameStatusTask().execute(stringUrl, playerId);
+        } else
+        {
+            //textView.setText("No network connection available.");
+        }
+
     }
+
+    private class GameStatusTask extends AsyncTask<String, Void, String>
+    {
+
+        @Override
+        protected String doInBackground(String... strings)
+        {
+            // params comes from the execute() call: params[0] is the url.
+            try
+            {
+                return requestGameStatus(strings[0], strings[1]);
+            } catch (IOException e)
+            {
+                return "Unable to retrieve web page. URL may be invalid.";
+            }
+        }
+
+        @Override
+        protected void onPostExecute(String result)
+        {
+            try
+            {
+                // Do something with the returned information
+                HashMap<String, String> gameStatus = parseGameStatus(result);
+
+                if (gameStatus != null)
+                {
+                    if (gameStatus.containsKey("winner") && !gameStatus.get("winner").equals("IN PROGRESS"))
+                    {
+                        // If there was a winner Let the user know who won.
+                        _onGameEndedListener.OnGameEnded(NetworkClass.this, gameStatus.get("winner"));
+                    }
+                    else if (gameStatus.containsKey("isYourTurn") && gameStatus.get("isYourTurn").equals("true"))
+                    {
+                        // Update the game grid and allows the user to launch a missile.
+                        _onNeedToUpdateBattleGridListener.OnNeedToUpdateBattleGrid(NetworkClass.this, "Your Turn", true);
+                    }
+                    else
+                    {
+                        _onNeedToUpdateBattleGridListener.OnNeedToUpdateBattleGrid(NetworkClass.this, "Opponent's Turn", false);
+                    }
+
+
+                    if (gameStatus.containsKey("message"))
+                    {
+                        String message = gameStatus.get("message");
+
+                        _onErrorReceivedListener.OnErrorReceived(NetworkClass.this, message);
+                    }
+                }
+
+            }
+            catch (Exception e)
+            {
+
+            }
+        }
+
+    }
+
+    private String requestGameStatus(String myurl, String playerId) throws IOException
+    {
+        InputStream is = null;
+
+        try
+        {
+            HashMap<String, String> missileAttack = new HashMap<String, String>();
+            missileAttack.put("playerId", playerId);
+
+            String jsonMissileAttack = _gson.toJson(missileAttack);
+
+            DefaultHttpClient httpclient = new DefaultHttpClient();
+            HttpPost httppostreq = new HttpPost(myurl);
+
+            StringEntity stringEntity = new StringEntity(jsonMissileAttack);
+
+            stringEntity.setContentType("application/json");
+            httppostreq.setEntity(stringEntity);
+
+            HttpResponse httpResponse = httpclient.execute(httppostreq);
+
+            String responseText;
+
+            responseText = EntityUtils.toString(httpResponse.getEntity());
+
+            return responseText;
+
+        } finally
+        {
+            if (is != null)
+            {
+                is.close();
+            }
+        }
+    }
+
+    private HashMap<String, String> parseGameStatus(String result)
+    {
+        try
+        {
+            Type gameType = new TypeToken<HashMap<String, String>>()
+            {
+            }.getType();
+            HashMap<String, String> missileAttackRes = _gson.fromJson(result, gameType);
+            return missileAttackRes;
+        } catch (Exception e)
+        {
+            return null;
+        }
+    }
+    //endregion <CheckStatus>
 
     class Game
     {

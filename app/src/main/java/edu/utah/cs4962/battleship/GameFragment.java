@@ -37,22 +37,13 @@ public class GameFragment extends Fragment
 
     Timer timer = new Timer();
 
+    public final static String GAME_STATUS_DONE = "DONE";
+    public final static String GAME_STATUS_WAITING = "WAITING";
+    public final static String GAME_STATUS_PLAYING = "PLAYING";
 
 
 
     //region Listeners
-
-    public interface OnSwitchPlayerListener
-    {
-        public void OnSwitchPlayer(GameFragment gf, String PlayersTurn);
-    }
-
-    OnSwitchPlayerListener _onSwitchPlayerListener = null;
-
-    public void setOnSwitchPlayerListener(OnSwitchPlayerListener _onSwitchPlayerListener)
-    {
-        this._onSwitchPlayerListener = _onSwitchPlayerListener;
-    }
 
     BattleGridView battleGridView = null;
 
@@ -94,6 +85,13 @@ public class GameFragment extends Fragment
         _allowedToTouch = true;
     }
 
+    public void recordAttack(int xPos, int yPos, String attackResult)
+    {
+        battleGridView.recordAttack(xPos, yPos, attackResult);
+
+    }
+
+
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState)
     {
@@ -108,8 +106,6 @@ public class GameFragment extends Fragment
         int cellPostion = 0;
         for (int position = 0; position < 200; position++)
         {
-//            NetworkClass.Cell cell = battleGrid.playerBoard[position];
-
             CellView cellView = new CellView(getActivity());
 
             cellView.setGridPosition(cellPostion);
@@ -124,26 +120,17 @@ public class GameFragment extends Fragment
                 @Override
                 public void onCellTouched(CellView c)
                 {
-                    if (c.getGridPosition() <= 100 )//&& !_game.GameOver)
+                    if (c.getGridPosition() <= 100 )
                     {
 
-                        int xPos = c.getGridPosition() % 10;
-                        int yPos = c.getGridPosition() / 10;
+                        int xPos = c.getGridPosition() / 10;
+                        int yPos = c.getGridPosition() % 10;
+
+                        BattleShipActivity.LaunchedMissileAtPosition = c.getGridPosition();
 
                         // Launch missile.
                         _onLaunchMissileListener.OnLauchMissile(GameFragment.this, xPos, yPos);
 
-
-//                        if (_game.getPlayersTurn() == PLAYER1 && _allowedToTouch)
-//                        {
-//                            _allowedToTouch = false;
-//                            _game.getPlayer(PLAYER1).LaunchMissile(c.getGridPosition());
-//
-//                        } else if (_game.getPlayersTurn() == PLAYER2 && _allowedToTouch)
-//                        {
-//                            _allowedToTouch = false;
-//                            _game.getPlayer(PLAYER2).LaunchMissile(c.getGridPosition());
-//                        }
                     }
                 }
             });

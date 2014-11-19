@@ -56,7 +56,6 @@ public class JoinGameActivity extends Activity
 
         rootLayout.addView(PlayerName, params1);
         rootLayout.addView(playerNameEditText, params1);
-
         rootLayout.addView(submitButton, params);
         setContentView(rootLayout);
     }

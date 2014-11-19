@@ -4,6 +4,7 @@ import android.app.Fragment;
 import android.database.DataSetObserver;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -21,7 +22,7 @@ import java.util.ArrayList;
 
 
 /**
- * Created by jesuszarate on 10/24/14.
+ * Created by Jesus Zarate on 10/24/14.
  */
 public class GameListFragment extends Fragment implements ListAdapter
 {
@@ -43,21 +44,12 @@ public class GameListFragment extends Fragment implements ListAdapter
         }
     }
 
-
-    // This list
     NetworkClass.Game[] _gameList;
 
     public void setGameList(NetworkClass.Game[] gameList)
     {
         _gameList = gameList;
         gameListView.invalidateViews();
-
-//        if(GameCollection.getInstance().getGamelist().size() == 0)
-//        {
-//            for(NetworkClass.Game g : gameList){
-//                GameCollection.getInstance().addGame(g);
-//            }
-//        }
     }
 
     public String getSelectedGameId()
@@ -91,12 +83,10 @@ public class GameListFragment extends Fragment implements ListAdapter
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState)
     {
-
         gameListView = new ListView(getActivity());
         gameListView.setAdapter(this);
         gameListView.setBackgroundColor(0xFF17A090);
-        gameListView.setDividerHeight(10);
-
+        gameListView.setDividerHeight(20);
 
         gameListView.setOnItemClickListener(new AdapterView.OnItemClickListener()
         {
@@ -114,14 +104,22 @@ public class GameListFragment extends Fragment implements ListAdapter
                     // Selected Game
                     _onGameSelectedListener.onGameSelected(GameListFragment.this,
                             _gameList[i]);
-//                    _onGameSelectedListener.onGameSelected(GameListFragment.this,
-//                            GameCollection.getInstance().getGamelist().get(i));
 
                     selectedGame = i;
+
+                    changeContentsOfView(view);
                 }
             }
         });
         return gameListView;
+    }
+
+    private void changeContentsOfView(View view)
+    {
+        TextView textView = (TextView) view;
+
+        textView.setText("Woooo I changed it");
+        gameListView.invalidateViews();
     }
 
     public void updateList()
@@ -163,7 +161,6 @@ public class GameListFragment extends Fragment implements ListAdapter
     @Override
     public int getCount()
     {
-        //return GameCollection.getInstance().getGamelist().size();
         if (_gameList != null)
             return _gameList.length;
         return 0;
@@ -172,7 +169,7 @@ public class GameListFragment extends Fragment implements ListAdapter
     @Override
     public Object getItem(int i)
     {
-        return GameCollection.getInstance().getGamelist().get(i);
+        return _gameList[i];
     }
 
     @Override
@@ -192,6 +189,7 @@ public class GameListFragment extends Fragment implements ListAdapter
     {
         TextView gameInfo = new TextView(getActivity());
         gameInfo.setTextColor(Color.WHITE);
+        gameInfo.setTextSize(14);
         ViewGroup.LayoutParams params = gameInfo.getLayoutParams();
 
         if (params == null)
@@ -206,28 +204,19 @@ public class GameListFragment extends Fragment implements ListAdapter
         gameInfo.setLayoutParams(params);
 
         if (i != selectedGame)
+        {
             gameInfo.setBackgroundColor(ITEM_COLOR);
+        }
         else
+        {
             gameInfo.setBackgroundColor(SELECTED_ITEM_COLOR);
-
-//        if (GameCollection.getInstance().getGamelist().get(i).GameOver)
-//        {
-//            gameInfo.setText("Game " + i + ": " + GameCollection.getInstance().getGamelist().get(i).Winner + "\n" +
-//                    "Player1 Score: " + GameCollection.getInstance().getGamelist().get(i).getPlayer1Score() + "\n" +
-//                    "Player2 Score: " + GameCollection.getInstance().getGamelist().get(i).getPlayer2Score());
-//        } else
-//        {
-//            gameInfo.setText("Game " + i + ": Player" + GameCollection.getInstance().getGamelist().get(i).getPlayersTurn() + " Turn " + "\n" +
-//                    "Player1 Score: " + GameCollection.getInstance().getGamelist().get(i).getPlayer1Score() + "\n" +
-//                    "Player2 Score: " + GameCollection.getInstance().getGamelist().get(i).getPlayer2Score());
-//        }
-//        return gameInfo;
-
+        }
         // TODO: SHOW GAMES FROM THE NEW LIST
         if (_gameList != null)
         {
             gameInfo.setText("Game: " + _gameList[i].name + "\n" +
-                    " Status: " + _gameList[i].status);
+                            "Status: " + _gameList[i].status + "\n"
+            );
         }
         return gameInfo;
     }

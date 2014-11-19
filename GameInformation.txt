@@ -7,3 +7,8 @@ playerId=4f30d0cc-2c3a-4ab4-9b2d-bd4cc77a9f52
 gameId=62f4671f-386c-4a31-b381-a69e3142e28f
 
 {"playerId":"18dfcc50-5020-4b45-bacf-bca40d3b18c4"}
+
+GameName = PLAYTHISGAME
+playerName = Alchemist1
+playerId=ad48d749-00b8-4135-9beb-3a81d04e8a83
+gameId=cd9624fb-954f-4256-adc3-b6ecaa8ca44d

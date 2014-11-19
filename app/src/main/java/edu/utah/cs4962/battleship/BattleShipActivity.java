@@ -15,6 +15,7 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.gson.Gson;
@@ -29,9 +30,20 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Timer;
+import java.util.TimerTask;
 
 
+/**
+ * Created by Jesus Zarate on 11/19/14.
+ *
+ * UID - U0816141
+ * Network Battleship.
+ * Class - CS 4962 Mobile Application Programming: Android
+ */
 public class BattleShipActivity extends Activity
 {
     public final static String PLAYERS_TURN = "players_turn";
@@ -53,10 +65,14 @@ public class BattleShipActivity extends Activity
     FrameLayout gameLayout = null;
 
     LinearLayout.LayoutParams params = null;
+    boolean YOUR_TURN = true;
+    TextView playerTurnText;
 
     Gson _gson = new Gson();
 
+    Timer timer = new Timer();
 
+    public static int LaunchedMissileAtPosition = 0;
 
     // Key -> gameId, Value -> playerId
     HashMap<String, String> MyNetworkGames = new HashMap<String, String>();
@@ -106,7 +122,186 @@ public class BattleShipActivity extends Activity
         gameLayout = new FrameLayout(this);
         gameLayout.setId(10);
 
-//region NewGameButton
+        _networkClass = new NetworkClass(BattleShipActivity.this);
+        _networkClass.getGameList(this); // Get game list from network.
+
+
+        //region <Network Listeners>
+
+        _networkClass.setOnGameListArrivedListener(new NetworkClass.OnGameListArrivedListener()
+       {
+           @Override
+           public void OnGameListArrived(NetworkClass networkClass, NetworkClass.Game[] _games)
+           {
+               Arrays.sort(_games, new Comparator<NetworkClass.Game>()
+               {
+                   @Override
+                   public int compare(NetworkClass.Game game, NetworkClass.Game game2)
+                   {
+                       return game.name.compareTo(game2.name);
+                   }
+               });
+
+               _gameListFragment.setGameList(_games);
+
+               // Initialize last selected game on the list
+               if (_gameListFragment.selectedGame <= _gameListFragment.getCount())
+               {
+                   String gameId = _gameListFragment.getSelectedGameId();
+                   if(MyNetworkGames.containsKey(gameId))
+                   {
+                       String playerId = MyNetworkGames.get(gameId);
+                       _networkClass.initBattleGrid(BattleShipActivity.this, gameId, playerId);
+                       timer.schedule(new CheckForPlayerTurnTask(), 3000);
+                   }
+               }
+           }
+       }
+
+        );
+
+        _networkClass.setOnBattleGridUpdatedListener(new NetworkClass.OnBattleGridUpdatedListener()
+        {
+            @Override
+            public void OnBattleGridUpdated (NetworkClass networkClass, HashMap < String, NetworkClass.Cell[]>battleGrid)
+            {
+                if (battleGrid != null)
+                {
+                    _gameFragment.setGame(battleGrid);
+                } else
+                {
+                    Toast.makeText(BattleShipActivity.this, "You cannot play this game", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+
+
+        // Meaning a new game was able to be created successfully.
+        _networkClass.setOnNewGameInfoArrivedListener(new NetworkClass.OnNewGameInfoArrivedListener()
+          {
+              @Override
+              public void OnGameInfoArrived (NetworkClass networkClass, HashMap < String, String > gameInfo)
+              {
+                  if (gameInfo != null)
+                  {
+                      if (gameInfo.containsKey(NetworkClass.GAME_ID) && gameInfo.containsKey(NetworkClass.PLAYER_ID))
+                      {
+                          String gameId = gameInfo.get(NetworkClass.GAME_ID);
+                          String playerId = gameInfo.get(NetworkClass.PLAYER_ID);
+                          MyNetworkGames.put(gameId, playerId);
+
+                          // Save this information immediately to the file to prevent data loss.
+                          saveGames();
+
+                          _networkClass.getGameList(BattleShipActivity.this);
+                      }
+                  } else
+                  {
+                      Toast.makeText(BattleShipActivity.this, "Unable to create new game.", Toast.LENGTH_SHORT).show();
+                  }
+              }
+          }
+
+        );
+
+        _networkClass.setOnErrorReceivedListener(new NetworkClass.OnErrorReceivedListener()
+         {
+             @Override
+             public void OnErrorReceived (NetworkClass networkClass, String errorMessage)
+             {
+                 Toast.makeText(BattleShipActivity.this, errorMessage, Toast.LENGTH_SHORT).show();
+             }
+         }
+        );
+
+        _networkClass.setOnJoinRequestReceivedListener(new NetworkClass.OnJoinRequestReceivedListener()
+        {
+            @Override
+            public void OnJoinRequestReceived (NetworkClass networkClass)
+            {
+                _waitingToJoinGame = true;
+
+                // Start the new activity that allows the user to enter his player name
+                // and allows him to join the game.
+                startJoinGameActivity(BattleShipActivity.this);
+            }
+        });
+
+
+        _networkClass.setOnPlayerIdReceivedListener(new NetworkClass.OnPlayerIdReceivedListener()
+        {
+            @Override
+            public void OnPlayerIdReceived (NetworkClass networkClass, String playerId)
+            {
+                // No longer waiting to join game.
+                _waitingToJoinGame = false;
+
+                String selectedGame = _gameListFragment.getSelectedGameId();
+                // Store the game
+                MyNetworkGames.put(selectedGame, playerId);
+
+                // Save the game information immediately to avoid data loss.
+                saveGames();
+
+                // Request the game.
+                // Will only retrieve if the game
+                // corresponds to this player and if the game is in progress.
+                _networkClass.initBattleGrid(BattleShipActivity.this, selectedGame, playerId);
+
+                timer.schedule(new CheckForPlayerTurnTask(), 3000);
+            }
+        }
+
+        );
+
+        _networkClass.setOnNeedToUpdateBattleGridListener(new NetworkClass.OnNeedToUpdateBattleGridListener()
+        {
+            @Override
+            public void OnNeedToUpdateBattleGrid (NetworkClass networkClass, String playersTurn,
+                                                  boolean myTurn)
+            {
+                setTitle(playersTurn);
+
+                if (myTurn)
+                {
+                    String gameId = _gameListFragment.getSelectedGameId();
+                    String playerId = MyNetworkGames.get(gameId);
+                    _networkClass.initBattleGrid(BattleShipActivity.this, gameId, playerId);
+                }
+
+                timer.schedule(new CheckForPlayerTurnTask(), 3000);
+            }
+        });
+
+        _networkClass.setOnMissileLaunchResultArrivedListener(new NetworkClass.OnMissileLaunchResultArrivedListener()
+        {
+            @Override
+            public void OnMissileLaunchResultArrived (NetworkClass networkClass, String result)
+            {
+                int xPos = LaunchedMissileAtPosition / BattleGridView.GridSize;
+                int yPos = LaunchedMissileAtPosition % BattleGridView.GridSize;
+
+                _gameFragment.recordAttack(xPos, yPos, result);
+
+                String gameId = _gameListFragment.getSelectedGameId();
+                String playerId = MyNetworkGames.get(gameId);
+                _networkClass.initBattleGrid(BattleShipActivity.this, gameId, playerId);
+            }
+        });
+
+        _networkClass.setOnGameEndedListener(new NetworkClass.OnGameEndedListener()
+        {
+            @Override
+            public void OnGameEnded(NetworkClass networkClass, String winner)
+            {
+                setTitle("WINNER: " + winner);
+                Toast.makeText(BattleShipActivity.this, winner + " Won", Toast.LENGTH_SHORT).show();
+                timer.cancel();
+            }
+        });
+        //endregion <Network Listeners>
+
+        //region NewGameButton
 
         Button newGameButton = new Button(this);
         newGameButton.setText("New Game");
@@ -118,11 +313,12 @@ public class BattleShipActivity extends Activity
             @Override
             public void onClick(View view)
             {
-                Game newGame = new Game();
-                // Add the game to the Fragment List.
-                _gameListFragment.AddItemGameToList(newGame);
+                //Start the new game activity
+                startNewGameActivity(BattleShipActivity.this);
             }
         });
+         //endregion NewGameButton
+
 
         LinearLayout.LayoutParams backButtonParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -140,21 +336,66 @@ public class BattleShipActivity extends Activity
 
                 showWindow("List");
 
+                setTitle("Battle Ship");
+
                 onPause();
             }
         });
+
+        //region <Refresh Button>
+        Button refreshButton = new Button(this);
+        refreshButton.setText("Refresh");
+        buttonLayout.addView(refreshButton,new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,ViewGroup.LayoutParams.WRAP_CONTENT));
+        refreshButton.setOnClickListener(new View.OnClickListener()
+         {
+             @Override
+             public void onClick (View view)
+             {
+                 _networkClass.getGameList(BattleShipActivity.this); // Get game list from network.
+             }
+         });
+
+        //endregion <Refresh Button>
 
         _gameListFragment.setOnGameSelectedListener(new GameListFragment.OnGameSelectedListener()
         {
             @Override
             public void onGameSelected(GameListFragment gameListFragment, NetworkClass.Game g)
             {
-                NetworkClass.Game game = g;
-
                 setProperWindowSize(false);
 
-                //_gameFragment.setGame(game);
+                if(timer == null)
+                {
+                    timer = new Timer();
+                }
+                if (MyNetworkGames.containsKey(g.id) && g.status.equals(GameFragment.GAME_STATUS_WAITING))
+                {
+                    setTitle("Waiting for player to join");
 
+                } else if (!_waitingToJoinGame)
+                {
+                    // Get the player id to retrieve the battle grid.
+                    String playerId = MyNetworkGames.get(g.id);
+
+                    if (playerId != null && g.status.equals(GameFragment.GAME_STATUS_PLAYING))//playerId != null)
+                    {
+                        // Request the game.
+                        // Will only retrieve if the game
+                        // corresponds to this player and if the game is in progress.
+                        _networkClass.initBattleGrid(BattleShipActivity.this, g.id, playerId);
+                        timer = new Timer();
+                        timer.schedule(new CheckForPlayerTurnTask(), 1000);
+
+                    } else if (g.status.equals(GameFragment.GAME_STATUS_WAITING))
+                    {
+                        startJoinGameActivity(BattleShipActivity.this);
+                    } else
+                    {
+                        //_gameFragment.clearBattleGrid();
+                        Toast.makeText(BattleShipActivity.this, "You are not part of this game.", Toast.LENGTH_SHORT).show();
+                    }
+                }
             }
         });
 
@@ -167,7 +408,25 @@ public class BattleShipActivity extends Activity
             }
         });
 
-//endregion NewGameButton
+        _gameFragment.setOnMissileLaunchListener(new GameFragment.OnLaunchMissileListener()
+         {
+             @Override
+             public void OnLauchMissile (GameFragment gameFragment,int xPos, int yPos)
+             {
+                 String gameId = _gameListFragment.getSelectedGameId();
+                 String playerId = MyNetworkGames.get(gameId);
+                 _networkClass.LaunchMissile(BattleShipActivity.this, gameId, playerId, xPos, yPos);
+
+                 if(YOUR_TURN)
+                 {
+                     _gameFragment.recordAttack(xPos, yPos, "Launch");
+                 }
+                 // Request status of the game to the server every 5 seconds to check if it is your
+                 // turn.
+                 //timer.schedule(new CheckForPlayerTurnTask(), 1000);
+             }
+         }
+        );
 
         secondLayout.addView(gameListLayout, new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.MATCH_PARENT, 100
@@ -177,7 +436,6 @@ public class BattleShipActivity extends Activity
                 0, ViewGroup.LayoutParams.MATCH_PARENT, 0);
 
         secondLayout.addView(gameLayout, params);
-
 
         fragmentManager = getFragmentManager();
         _addTransaction = fragmentManager.beginTransaction();
@@ -226,8 +484,9 @@ public class BattleShipActivity extends Activity
         gameLayout = new FrameLayout(this);
         gameLayout.setId(10);
 
-        _networkClass = new NetworkClass();
+        _networkClass = new NetworkClass(BattleShipActivity.this);
         _networkClass.getGameList(this); // Get game list from network.
+
 
         //region <Network Listeners>
 
@@ -236,192 +495,326 @@ public class BattleShipActivity extends Activity
             @Override
             public void OnGameListArrived(NetworkClass networkClass, NetworkClass.Game[] _games)
             {
-                _gameListFragment.setGameList(_games);
-            }
-        });
-
-        _networkClass.setOnBattleGridUpdatedListener(new NetworkClass.OnBattleGridUpdatedListener()
-        {
-            @Override
-            public void OnBattleGridUpdated(NetworkClass networkClass, HashMap<String, NetworkClass.Cell[]> battleGrid)
-            {
-                if (battleGrid != null)
+                Arrays.sort(_games, new Comparator<NetworkClass.Game>()
                 {
-                    _gameFragment.setGame(battleGrid);
-                } else
-                {
-                    Toast.makeText(BattleShipActivity.this, "You cannot play this game", Toast.LENGTH_SHORT).show();
-                }
-            }
-        });
-
-        // Meaning a new game was able to be created successfully.
-        _networkClass.setOnNewGameInfoArrivedListener(new NetworkClass.OnNewGameInfoArrivedListener()
-        {
-            @Override
-            public void OnGameInfoArrived(NetworkClass networkClass, HashMap<String, String> gameInfo)
-            {
-                if(gameInfo != null)
-                {
-                    if(gameInfo.containsKey(NetworkClass.GAME_ID) && gameInfo.containsKey(NetworkClass.PLAYER_ID))
+                    @Override
+                    public int compare(NetworkClass.Game game, NetworkClass.Game game2)
                     {
-                        String gameId = gameInfo.get(NetworkClass.GAME_ID);
-                        String playerId = gameInfo.get(NetworkClass.PLAYER_ID);
-                        MyNetworkGames.put(gameId, playerId);
+                        return game.name.compareTo(game2.name);
+                    }
+                });
+
+                _gameListFragment.setGameList(_games);
+
+                // Initialize last selected game on the list
+                if (_gameListFragment.selectedGame <= _gameListFragment.getCount())
+                {
+                    String gameId = _gameListFragment.getSelectedGameId();
+                    if(MyNetworkGames.containsKey(gameId))
+                    {
+                        String playerId = MyNetworkGames.get(gameId);
+                        _networkClass.initBattleGrid(BattleShipActivity.this, gameId, playerId);
+                        timer.schedule(new CheckForPlayerTurnTask(), 3000);
+
                     }
                 }
-                else{
-                    Toast.makeText(BattleShipActivity.this, "Unable to create new game.", Toast.LENGTH_SHORT).show();
-                }
-            }
-        });
+        }
+    }
 
-//        _networkClass.set_onGameDetailArrivedListener(new NetworkClass.OnGameDetailArrivedListener()
-//        {
-//            @Override
-//            public void OnGameDetailArrived(NetworkClass networkClass, NetworkClass.GameDetail gameDetail)
-//            {
-//                NetworkClass.GameDetail g = gameDetail;
-//            }
-//        });
+    );
 
-        _networkClass.setOnErrorReceivedListener(new NetworkClass.OnErrorReceivedListener()
+    _networkClass.setOnBattleGridUpdatedListener(new NetworkClass.OnBattleGridUpdatedListener()
+    {
+        @Override
+        public void OnBattleGridUpdated (NetworkClass
+        networkClass, HashMap < String, NetworkClass.Cell[]>battleGrid)
         {
-            @Override
-            public void OnErrorReceived(NetworkClass networkClass, String errorMessage)
+            if (battleGrid != null)
             {
-                Toast.makeText(BattleShipActivity.this, errorMessage, Toast.LENGTH_SHORT).show();
+                _gameFragment.setGame(battleGrid);
+            } else
+            {
+                Toast.makeText(BattleShipActivity.this, "You cannot play this game", Toast.LENGTH_SHORT).show();
             }
-        });
+        }
+    });
 
 
-        _networkClass.setOnJoinRequestReceivedListener(new NetworkClass.OnJoinRequestReceivedListener()
+    // Meaning a new game was able to be created successfully.
+    _networkClass.setOnNewGameInfoArrivedListener(new NetworkClass.OnNewGameInfoArrivedListener()
+
+    {
+        @Override
+        public void OnGameInfoArrived (NetworkClass
+        networkClass, HashMap < String, String > gameInfo)
         {
-            @Override
-            public void OnJoinRequestReceived(NetworkClass networkClass)
+            if (gameInfo != null)
             {
-                _waitingToJoinGame = true;
-
-                // Start the new activity that allows the user to enter his player name
-                // and allows him to join the game.
-                startJoinGameActivity(BattleShipActivity.this);
-            }
-        });
-
-
-        _networkClass.setOnPlayerIdReceivedListener(new NetworkClass.OnPlayerIdReceivedListener()
-        {
-            @Override
-            public void OnPlayerIdReceived(NetworkClass networkClass, String playerId)
-            {
-                // No longer waiting to join game.
-                _waitingToJoinGame = false;
-
-                String selectedGame = _gameListFragment.getSelectedGameId();
-                // Store the game
-                MyNetworkGames.put(selectedGame, playerId);
-
-                // Request the game.
-                // Will only retrieve if the game
-                // corresponds to this player and if the game is in progress.
-                _networkClass.initBattleGrid(BattleShipActivity.this, selectedGame, playerId);
-
-            }
-        });
-        //endregion <Network Listeners>
-
-
-        //region NewGameButton
-
-        Button newGameButton = new Button(this);
-        newGameButton.setText("New Game");
-        buttonLayout.addView(newGameButton, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-
-        newGameButton.setOnClickListener(new View.OnClickListener()
-        {
-            @Override
-            public void onClick(View view)
-            {
-                //Start the new game activity
-                startNewGameActivity(BattleShipActivity.this);
-            }
-        });
-
-        //endregion NewGameButton
-
-
-        //region Select Game
-        _gameListFragment.setOnGameSelectedListener(new GameListFragment.OnGameSelectedListener()
-        {
-            @Override
-            public void onGameSelected(GameListFragment gameListFragment, NetworkClass.Game g)
-            {
-                // TODO: WHEN THE USER CLICKS ON AN AWAITING GAME NOTHING SHOULD HAPPEN EXCEPT...
-                // TODO:    ...MAYBE A TOAST, LETTING THEM KNOW THAT THEY'RE WAITING ON THAT GAME.
-                if (!_waitingToJoinGame)
+                if (gameInfo.containsKey(NetworkClass.GAME_ID) && gameInfo.containsKey(NetworkClass.PLAYER_ID))
                 {
-                    // Get the player id to retrieve the battle grid.
-                    String playerId = MyNetworkGames.get(g.id);
+                    String gameId = gameInfo.get(NetworkClass.GAME_ID);
+                    String playerId = gameInfo.get(NetworkClass.PLAYER_ID);
+                    MyNetworkGames.put(gameId, playerId);
 
+                    // Save this information immediately to the file to prevent data loss.
+                    saveGames();
+
+                    _networkClass.getGameList(BattleShipActivity.this);
+                }
+            } else
+            {
+                Toast.makeText(BattleShipActivity.this, "Unable to create new game.", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    );
+
+    _networkClass.setOnErrorReceivedListener(new NetworkClass.OnErrorReceivedListener()
+
+    {
+        @Override
+        public void OnErrorReceived (NetworkClass networkClass, String errorMessage)
+        {
+            Toast.makeText(BattleShipActivity.this, errorMessage, Toast.LENGTH_SHORT).show();
+        }
+    }
+    );
+
+    _networkClass.setOnJoinRequestReceivedListener(new NetworkClass.OnJoinRequestReceivedListener()
+    {
+        @Override
+        public void OnJoinRequestReceived (NetworkClass networkClass)
+        {
+            _waitingToJoinGame = true;
+
+            // Start the new activity that allows the user to enter his player name
+            // and allows him to join the game.
+            startJoinGameActivity(BattleShipActivity.this);
+        }
+    });
+
+
+    _networkClass.setOnPlayerIdReceivedListener(new NetworkClass.OnPlayerIdReceivedListener()
+    {
+        @Override
+        public void OnPlayerIdReceived (NetworkClass networkClass, String playerId)
+        {
+            // No longer waiting to join game.
+            _waitingToJoinGame = false;
+
+            String selectedGame = _gameListFragment.getSelectedGameId();
+            // Store the game
+            MyNetworkGames.put(selectedGame, playerId);
+
+            // Save the game information immediately to avoid data loss.
+            saveGames();
+
+            // Request the game.
+            // Will only retrieve if the game
+            // corresponds to this player and if the game is in progress.
+            _networkClass.initBattleGrid(BattleShipActivity.this, selectedGame, playerId);
+
+            timer.schedule(new CheckForPlayerTurnTask(), 3000);
+        }
+    });
+
+    _networkClass.setOnNeedToUpdateBattleGridListener(new NetworkClass.OnNeedToUpdateBattleGridListener()
+    {
+        @Override
+        public void OnNeedToUpdateBattleGrid (NetworkClass networkClass, String playersTurn,
+        boolean myTurn)
+        {
+            setTitle(playersTurn);
+
+            if (myTurn)
+            {
+                String gameId = _gameListFragment.getSelectedGameId();
+                String playerId = MyNetworkGames.get(gameId);
+                _networkClass.initBattleGrid(BattleShipActivity.this, gameId, playerId);
+            }
+
+            timer.schedule(new CheckForPlayerTurnTask(), 3000);
+        }
+    });
+
+    _networkClass.setOnMissileLaunchResultArrivedListener(new NetworkClass.OnMissileLaunchResultArrivedListener()
+    {
+        @Override
+        public void OnMissileLaunchResultArrived (NetworkClass networkClass, String result)
+        {
+            int xPos = LaunchedMissileAtPosition / BattleGridView.GridSize;
+            int yPos = LaunchedMissileAtPosition % BattleGridView.GridSize;
+
+            _gameFragment.recordAttack(xPos, yPos, result);
+
+            String gameId = _gameListFragment.getSelectedGameId();
+            String playerId = MyNetworkGames.get(gameId);
+            _networkClass.initBattleGrid(BattleShipActivity.this, gameId, playerId);
+        }
+    });
+
+    _networkClass.setOnGameEndedListener(new NetworkClass.OnGameEndedListener()
+    {
+        @Override
+        public void OnGameEnded(NetworkClass networkClass, String winner)
+        {
+            setTitle("WINNER: " + winner);
+            Toast.makeText(BattleShipActivity.this, winner + " Won", Toast.LENGTH_SHORT).show();
+            timer.cancel();
+        }
+    });
+    //endregion <Network Listeners>
+
+
+    Button newGameButton = new Button(this);
+    newGameButton.setText("New Game");
+    buttonLayout.addView(newGameButton,new LinearLayout.LayoutParams(
+    ViewGroup.LayoutParams.WRAP_CONTENT,ViewGroup.LayoutParams.WRAP_CONTENT));
+
+    newGameButton.setOnClickListener(new View.OnClickListener()
+
+    {
+        @Override
+        public void onClick (View view)
+        {
+            //Start the new game activity
+            startNewGameActivity(BattleShipActivity.this);
+        }
+    }
+
+    );
+
+    Button refreshButton = new Button(this);
+    refreshButton.setText("Refresh");
+    buttonLayout.addView(refreshButton,new LinearLayout.LayoutParams(
+    ViewGroup.LayoutParams.WRAP_CONTENT,ViewGroup.LayoutParams.WRAP_CONTENT));
+    refreshButton.setOnClickListener(new View.OnClickListener()
+
+    {
+        @Override
+        public void onClick (View view)
+        {
+            _networkClass.getGameList(BattleShipActivity.this); // Get game list from network.
+        }
+    }
+
+    );
+    //endregion NewGameButton
+
+
+    //region Select Game
+    _gameListFragment.setOnGameSelectedListener(new GameListFragment.OnGameSelectedListener()
+
+    {
+        @Override
+        public void onGameSelected (GameListFragment gameListFragment, NetworkClass.Game g)
+        {
+            if(timer == null)
+            {
+                timer = new Timer();
+            }
+            if (MyNetworkGames.containsKey(g.id) && g.status.equals(GameFragment.GAME_STATUS_WAITING))
+            {
+                setTitle("Waiting for player to join");
+
+            } else if (!_waitingToJoinGame)
+            {
+                // Get the player id to retrieve the battle grid.
+                String playerId = MyNetworkGames.get(g.id);
+
+                if (playerId != null && g.status.equals(GameFragment.GAME_STATUS_PLAYING))//playerId != null)
+                {
                     // Request the game.
                     // Will only retrieve if the game
                     // corresponds to this player and if the game is in progress.
                     _networkClass.initBattleGrid(BattleShipActivity.this, g.id, playerId);
+                    timer = new Timer();
+                    timer.schedule(new CheckForPlayerTurnTask(), 1000);
+
+                } else if (g.status.equals(GameFragment.GAME_STATUS_WAITING))
+                {
+                    startJoinGameActivity(BattleShipActivity.this);
+                } else
+                {
+                    //_gameFragment.clearBattleGrid();
+                    Toast.makeText(BattleShipActivity.this, "You are not part of this game.", Toast.LENGTH_SHORT).show();
                 }
             }
-        });
-        //endregion Select Game
-
-
-        _gameFragment.setOnUpdateGameListListener(new GameFragment.OnUpdateGameListListener()
-        {
-            @Override
-            public void OnUpdateGameList(GameFragment gameFragment)
-            {
-                _gameListFragment.updateList();
-            }
-        });
-
-       _gameFragment.setOnMissileLaunchListener(new GameFragment.OnLaunchMissileListener()
-       {
-           @Override
-           public void OnLauchMissile(GameFragment gameFragment, int xPos, int yPos)
-           {
-               String gameId = _gameListFragment.getSelectedGameId();
-               String playerId = MyNetworkGames.get(gameId);
-               _networkClass.LaunchMissile(BattleShipActivity.this, gameId, playerId, xPos, yPos);
-           }
-       });
-
-        secondLayout.addView(gameListLayout, new LinearLayout.LayoutParams(
-                0, ViewGroup.LayoutParams.MATCH_PARENT, 20
-        ));
-
-        params = new LinearLayout.LayoutParams(
-                0, ViewGroup.LayoutParams.MATCH_PARENT, 80);
-
-        secondLayout.addView(gameLayout, params);
-
-
-        fragmentManager = getFragmentManager();
-        _addTransaction = fragmentManager.beginTransaction();
-
-        _addTransaction.add(10, _gameFragment);
-
-        _addTransaction.add(11, _gameListFragment);
-
-        _addTransaction.commit();
-
-        rootLayout.addView(firstLayout, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ));
-
-        rootLayout.addView(secondLayout, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 0, 90
-        ));
-        setContentView(rootLayout);
+        }
     }
+
+    );
+    //endregion Select Game
+
+    _gameFragment.setOnUpdateGameListListener(new GameFragment.OnUpdateGameListListener()
+
+    {
+        @Override
+        public void OnUpdateGameList (GameFragment gameFragment)
+        {
+            _gameListFragment.updateList();
+        }
+    }
+
+    );
+
+    _gameFragment.setOnMissileLaunchListener(new GameFragment.OnLaunchMissileListener()
+
+    {
+        @Override
+        public void OnLauchMissile (GameFragment gameFragment,int xPos, int yPos)
+        {
+            String gameId = _gameListFragment.getSelectedGameId();
+            String playerId = MyNetworkGames.get(gameId);
+            _networkClass.LaunchMissile(BattleShipActivity.this, gameId, playerId, xPos, yPos);
+
+            if(YOUR_TURN)
+            {
+                _gameFragment.recordAttack(xPos, yPos, "Launch");
+            }
+            // Request status of the game to the server every 5 seconds to check if it is your
+            // turn.
+            //timer.schedule(new CheckForPlayerTurnTask(), 1000);
+        }
+    }
+
+    );
+
+    //region <LayoutSetup>
+    secondLayout.addView(gameListLayout,new LinearLayout.LayoutParams(
+        0,ViewGroup.LayoutParams.MATCH_PARENT,20
+        ));
+
+    params=new LinearLayout.LayoutParams(
+        0,ViewGroup.LayoutParams.MATCH_PARENT,80);
+
+    secondLayout.addView(gameLayout,params);
+
+
+    fragmentManager=
+
+    getFragmentManager();
+
+    _addTransaction=fragmentManager.beginTransaction();
+
+    _addTransaction.add(10,_gameFragment);
+
+    _addTransaction.add(11,_gameListFragment);
+
+    _addTransaction.commit();
+
+    rootLayout.addView(firstLayout,new LinearLayout.LayoutParams(
+    ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT
+    ));
+
+    rootLayout.addView(secondLayout,new LinearLayout.LayoutParams(
+    ViewGroup.LayoutParams.MATCH_PARENT,0,90
+        ));
+    //endregion <LayoutSetup>
+
+    setContentView(rootLayout);
+}
 
 
     private void showWindow(String whatWindow)
@@ -487,6 +880,19 @@ public class BattleShipActivity extends Activity
         startActivityForResult(intent, JOIN_GAME_REQUEST_CODE);
     }
 
+class CheckForPlayerTurnTask extends TimerTask
+{
+    public void run()
+    {
+        String gameId = _gameListFragment.getSelectedGameId();
+        String playerId = MyNetworkGames.get(gameId);
+
+        // Send a request to the user to check who's turn it is.
+        _networkClass.CheckGameStatus(BattleShipActivity.this, gameId, playerId);
+    }
+
+}
+
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data)
     {
@@ -494,14 +900,15 @@ public class BattleShipActivity extends Activity
         if (resultCode == Activity.RESULT_OK)
         {
             // If the request code is equal to join game code
-            if(requestCode == JOIN_GAME_REQUEST_CODE){
-                String gameId =_gameListFragment.getSelectedGameId();
+            if (requestCode == JOIN_GAME_REQUEST_CODE)
+            {
+                String gameId = _gameListFragment.getSelectedGameId();
                 String playerName = data.getStringExtra(BattleShipActivity.PLAYER_NAME);
 
                 // Request to join the selected game.
                 _networkClass.JoinGame(BattleShipActivity.this, gameId, playerName);
 
-            }else
+            } else
             {
                 String gameName = data.getStringExtra(BattleShipActivity.GAME_NAME);
                 String playerName = data.getStringExtra(BattleShipActivity.PLAYER_NAME);
@@ -516,7 +923,7 @@ public class BattleShipActivity extends Activity
     protected void onResume()
     {
         super.onResume();
-
+        timer = new Timer();
         File filesDir = getFilesDir();
         try
         {
@@ -533,22 +940,6 @@ public class BattleShipActivity extends Activity
             {
                 String ex = e.toString();
             }
-            bufferedReader.close();
-
-            // Retrieve Game List
-            file = new File(filesDir, "gameList.txt");
-            textReader = new FileReader(file);
-
-            bufferedReader = new BufferedReader(textReader);
-            String jsonGameList;
-            jsonGameList = bufferedReader.readLine();
-
-            Type gameListType = new TypeToken<ArrayList<Game>>()
-            {
-            }.getType();
-            ArrayList<Game> gameList = _gson.fromJson(jsonGameList, gameListType);
-
-            _gameListFragment.setGameList(gameList);
             bufferedReader.close();
 
             // Retrieve the users network games.
@@ -574,6 +965,29 @@ public class BattleShipActivity extends Activity
         {
             e.printStackTrace();
         }
+    }
+
+    public void saveGames()
+    {
+        File filesDir = getFilesDir();
+
+        try
+        {
+            // Save the users network games.
+            File file = new File(filesDir, "myNetworkGames.txt");
+            FileWriter textWriter = null;
+            textWriter = new FileWriter(file);
+            BufferedWriter bufferedWriter = new BufferedWriter(textWriter);
+
+            String jsonNetWorkGames = _gson.toJson(MyNetworkGames);
+            bufferedWriter.write(jsonNetWorkGames);
+            bufferedWriter.close();
+        } catch (IOException e)
+        {
+            e.printStackTrace();
+        }
+
+
     }
 
     @Override
@@ -623,7 +1037,7 @@ public class BattleShipActivity extends Activity
         {
             e.printStackTrace();
         }
-
+        timer.cancel();
     }
 
     @Override
