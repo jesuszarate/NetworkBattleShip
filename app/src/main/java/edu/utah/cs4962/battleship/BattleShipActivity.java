@@ -41,7 +41,7 @@ import java.util.TimerTask;
  * Created by Jesus Zarate on 11/19/14.
  *
  * UID - U0816141
- * Network Battleship.
+ * Network Battleship. (READY TO GO!)
  * Class - CS 4962 Mobile Application Programming: Android
  */
 public class BattleShipActivity extends Activity
