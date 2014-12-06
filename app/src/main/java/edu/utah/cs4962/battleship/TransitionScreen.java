@@ -15,7 +15,7 @@ import android.widget.TextView;
  */
 public class TransitionScreen extends Activity
 {
-    private String _playersTurn = "";
+    private String _playersTurn = "Aloha how are you";
     @Override
     protected void onCreate(Bundle savedInstanceState)
     {
